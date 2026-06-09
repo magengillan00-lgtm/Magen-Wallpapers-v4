@@ -81,7 +81,6 @@ fun HomeScreen(
     onRefreshChange: (Boolean) -> Unit,
     onSkipLandscapeChange: (Boolean) -> Unit,
     onSkipNonInteractiveChange: (Boolean) -> Unit,
-    onChangeOnUnlockChange: (Boolean) -> Unit,
     addAlbumViewModel: AddAlbumViewModel,
     albumsViewModel: AlbumsViewModel
 ) {
@@ -212,8 +211,7 @@ fun HomeScreen(
                         onShuffleCheck = onShuffleCheck,
                         onRefreshChange = onRefreshChange,
                         onSkipLandscapeChange = onSkipLandscapeChange,
-                        onSkipNonInteractiveChange = onSkipNonInteractiveChange,
-                        onChangeOnUnlockChange = onChangeOnUnlockChange
+                        onSkipNonInteractiveChange = onSkipNonInteractiveChange
                     )
                     else -> LibraryScreen(
                         albums = albums,

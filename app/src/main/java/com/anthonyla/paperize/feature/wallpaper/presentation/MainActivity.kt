@@ -36,8 +36,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.lifecycleScope
-import com.anthonyla.paperize.App
 import com.anthonyla.paperize.core.SettingsConstants
 import com.anthonyla.paperize.core.Type
 import com.anthonyla.paperize.data.settings.SettingsDataStore
@@ -45,17 +43,11 @@ import com.anthonyla.paperize.feature.wallpaper.presentation.settings_screen.Set
 import com.anthonyla.paperize.feature.wallpaper.presentation.settings_screen.SettingsState
 import com.anthonyla.paperize.feature.wallpaper.presentation.settings_screen.SettingsViewModel
 import com.anthonyla.paperize.feature.wallpaper.presentation.themes.AutoWallpaperChangerProTheme
-import com.anthonyla.paperize.feature.wallpaper.wallpaper_alarmmanager.UnlockReceiver
 import com.anthonyla.paperize.feature.wallpaper.wallpaper_alarmmanager.WallpaperAlarmItem
 import com.anthonyla.paperize.feature.wallpaper.wallpaper_alarmmanager.WallpaperAlarmSchedulerImpl
 import com.anthonyla.paperize.feature.wallpaper.wallpaper_alarmmanager.WallpaperReceiver
 import com.anthonyla.paperize.feature.wallpaper.wallpaper_service.HomeWallpaperService
-import com.anthonyla.paperize.feature.wallpaper.wallpaper_service.LockWallpaperService
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-
-import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -149,23 +141,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // Register/unlock receiver based on settings changes
-            LaunchedEffect(
-                settingsState.value.scheduleSettings.changeOnUnlock,
-                settingsState.value.wallpaperSettings.enableChanger
-            ) {
-                val app = application as? App
-                val changeOnUnlock = settingsState.value.scheduleSettings.changeOnUnlock
-                val enableChanger = settingsState.value.wallpaperSettings.enableChanger
-                if (app != null) {
-                    if (changeOnUnlock && enableChanger) {
-                        app.registerUnlockReceiver()
-                    } else {
-                        app.unregisterUnlockReceiver()
-                    }
-                }
-            }
-
             AutoWallpaperChangerProTheme(
                 darkMode = settingsState.value.themeSettings.darkMode,
                 amoledMode = settingsState.value.themeSettings.amoledTheme,
@@ -177,165 +152,6 @@ class MainActivity : ComponentActivity() {
                 ) {
                     AutoWallpaperChangerProApp(isFirstLaunch ?: true, scheduler)
                 }
-            }
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        handleUnlockChangeIfNeeded()
-        // Re-register the dynamic receiver if needed (in case process was killed)
-        (application as? App)?.registerUnlockReceiverIfNeeded()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        // Update lock state when activity is paused (e.g., user pressed home or screen turned off)
-        // This ensures we track when the device gets locked
-        try {
-            val keyguardManager = getSystemService(KEYGUARD_SERVICE) as android.app.KeyguardManager
-            val isLocked = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                keyguardManager.isDeviceLocked
-            } else {
-                keyguardManager.isKeyguardLocked
-            }
-            UnlockReceiver.saveLockState(this, isLocked)
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Error checking lock state in onPause", e)
-        }
-    }
-
-    override fun onStop() {
-        super.onStop()
-        // When activity stops, assume device will be locked next time
-        // This ensures we detect unlock even after prolonged background time
-        UnlockReceiver.saveLockState(this, true)
-        UnlockReceiver.saveWasLockedBeforeScreenOff(this, true)
-    }
-
-    /**
-     * Fallback mechanism for detecting device unlock on devices where
-     * ACTION_USER_PRESENT broadcast is not delivered (e.g., Honor/Huawei devices).
-     * This checks the keyguard state when the activity resumes and triggers
-     * a wallpaper change if the device was just unlocked.
-     *
-     * This uses SharedPreferences (via UnlockReceiver companion) to persist
-     * lock state across process kills, which is essential for Honor devices
-     * that aggressively kill background processes.
-     */
-    private fun handleUnlockChangeIfNeeded() {
-        try {
-            val keyguardManager = getSystemService(KEYGUARD_SERVICE) as android.app.KeyguardManager
-            val isCurrentlyLocked = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                keyguardManager.isDeviceLocked
-            } else {
-                keyguardManager.isKeyguardLocked
-            }
-
-            val wasDeviceLocked = UnlockReceiver.getLockState(this)
-
-            Log.d("MainActivity", "handleUnlockChangeIfNeeded: wasDeviceLocked=$wasDeviceLocked, isCurrentlyLocked=$isCurrentlyLocked")
-
-            // If the device was previously locked and now it's not, it was just unlocked
-            if (wasDeviceLocked && !isCurrentlyLocked) {
-                // CRITICAL: Check debouncing to prevent multiple wallpaper changes
-                if (UnlockReceiver.isDebounced(this)) {
-                    Log.d("MainActivity", "Debounced: skipping wallpaper change in handleUnlockChangeIfNeeded")
-                    UnlockReceiver.saveLockState(this, isCurrentlyLocked)
-                    return
-                }
-
-                lifecycleScope.launch(Dispatchers.IO) {
-                    try {
-                        val changeOnUnlock = settingsDataStoreImpl.getBoolean(SettingsConstants.CHANGE_ON_UNLOCK) ?: false
-                        if (!changeOnUnlock) {
-                            Log.d("MainActivity", "Change on unlock is disabled, skipping")
-                            return@launch
-                        }
-
-                        val enableChanger = settingsDataStoreImpl.getBoolean(SettingsConstants.ENABLE_CHANGER) ?: false
-                        if (!enableChanger) {
-                            Log.d("MainActivity", "Wallpaper changer is disabled, skipping unlock change")
-                            return@launch
-                        }
-
-                        // Record the wallpaper change time to prevent UnlockReceiver from re-triggering
-                        UnlockReceiver.saveLastWallpaperChangeTime(this@MainActivity, System.currentTimeMillis())
-
-                        triggerWallpaperChangeOnUnlock()
-                    } catch (e: Exception) {
-                        Log.e("MainActivity", "Error changing wallpaper on unlock (onResume)", e)
-                    }
-                }
-            }
-
-            // Update lock state tracking
-            UnlockReceiver.saveLockState(this, isCurrentlyLocked)
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Error in handleUnlockChangeIfNeeded", e)
-        }
-    }
-
-    /**
-     * Triggers the wallpaper change services for the unlock event.
-     */
-    private suspend fun triggerWallpaperChangeOnUnlock() {
-        val setHome = settingsDataStoreImpl.getBoolean(SettingsConstants.ENABLE_HOME_WALLPAPER) ?: false
-        val setLock = settingsDataStoreImpl.getBoolean(SettingsConstants.ENABLE_LOCK_WALLPAPER) ?: false
-        val scheduleSeparately = settingsDataStoreImpl.getBoolean(SettingsConstants.SCHEDULE_SEPARATELY) ?: false
-        val homeInterval = settingsDataStoreImpl.getInt(SettingsConstants.HOME_WALLPAPER_CHANGE_INTERVAL)
-            ?: SettingsConstants.WALLPAPER_CHANGE_INTERVAL_DEFAULT
-        val lockInterval = settingsDataStoreImpl.getInt(SettingsConstants.LOCK_WALLPAPER_CHANGE_INTERVAL)
-            ?: SettingsConstants.WALLPAPER_CHANGE_INTERVAL_DEFAULT
-
-        Log.d("MainActivity", "Triggering wallpaper change on unlock: setHome=$setHome, setLock=$setLock, scheduleSeparately=$scheduleSeparately")
-
-        withContext(Dispatchers.Main) {
-            try {
-                if (scheduleSeparately) {
-                    if (setLock) {
-                        val lockIntent = Intent(this@MainActivity, LockWallpaperService::class.java).apply {
-                            action = LockWallpaperService.Actions.START.toString()
-                            putExtra("homeInterval", homeInterval)
-                            putExtra("lockInterval", lockInterval)
-                            putExtra("scheduleSeparately", true)
-                            putExtra("type", Type.LOCK.ordinal)
-                        }
-                        startForegroundService(lockIntent)
-                    }
-                    if (setHome) {
-                        val homeIntent = Intent(this@MainActivity, HomeWallpaperService::class.java).apply {
-                            action = HomeWallpaperService.Actions.START.toString()
-                            putExtra("homeInterval", homeInterval)
-                            putExtra("lockInterval", lockInterval)
-                            putExtra("scheduleSeparately", true)
-                            putExtra("type", Type.HOME.ordinal)
-                        }
-                        startForegroundService(homeIntent)
-                    }
-                } else {
-                    if (setHome) {
-                        val homeIntent = Intent(this@MainActivity, HomeWallpaperService::class.java).apply {
-                            action = HomeWallpaperService.Actions.START.toString()
-                            putExtra("homeInterval", homeInterval)
-                            putExtra("lockInterval", lockInterval)
-                            putExtra("scheduleSeparately", false)
-                            putExtra("type", Type.SINGLE.ordinal)
-                        }
-                        startForegroundService(homeIntent)
-                    } else if (setLock) {
-                        val lockIntent = Intent(this@MainActivity, LockWallpaperService::class.java).apply {
-                            action = LockWallpaperService.Actions.START.toString()
-                            putExtra("homeInterval", homeInterval)
-                            putExtra("lockInterval", lockInterval)
-                            putExtra("scheduleSeparately", false)
-                            putExtra("type", Type.SINGLE.ordinal)
-                        }
-                        startForegroundService(lockIntent)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("MainActivity", "Error starting foreground service for unlock change", e)
             }
         }
     }

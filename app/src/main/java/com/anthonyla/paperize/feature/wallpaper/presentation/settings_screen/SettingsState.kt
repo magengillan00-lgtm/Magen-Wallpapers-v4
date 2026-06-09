@@ -42,8 +42,7 @@ data class SettingsState(
         val startTime: Pair<Int, Int> = Pair(0, 0),
         val refresh: Boolean = true,
         val skipLandscape: Boolean = false,
-        val skipNonInteractive: Boolean = false,
-        val changeOnUnlock: Boolean = false
+        val skipNonInteractive: Boolean = false
     )
 
     data class EffectSettings(
@@ -82,7 +81,6 @@ data class SettingsState(
         val homeAlbumName: String,
         val shuffle: Boolean,
         val skipLandscape: Boolean,
-        val skipNonInteractive: Boolean,
-        val changeOnUnlock: Boolean
+        val skipNonInteractive: Boolean
     )
 }

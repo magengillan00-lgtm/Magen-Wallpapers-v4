@@ -531,18 +531,6 @@ fun AutoWallpaperChangerProApp(
                 onSkipNonInteractiveChange = {
                     skipNonInteractive ->
                     settingsViewModel.onEvent(SettingsEvent.SetSkipNonInteractive(skipNonInteractive))
-                },
-                onChangeOnUnlockChange = { changeOnUnlock ->
-                    settingsViewModel.onEvent(SettingsEvent.SetChangeOnUnlock(changeOnUnlock))
-                    // Register/unregister the dynamic unlock receiver based on setting
-                    val app = context.applicationContext as? com.anthonyla.paperize.App
-                    if (app != null) {
-                        if (changeOnUnlock && settingsState.value.wallpaperSettings.enableChanger) {
-                            app.registerUnlockReceiver()
-                        } else {
-                            app.unregisterUnlockReceiver()
-                        }
-                    }
                 }
             )
         }
