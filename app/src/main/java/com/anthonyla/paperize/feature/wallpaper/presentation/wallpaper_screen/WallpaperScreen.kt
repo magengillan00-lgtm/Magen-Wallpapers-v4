@@ -109,7 +109,11 @@ fun WallpaperScreen(
 
         when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarmManager?.canScheduleExactAlarms() == false -> {
-                context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+                try {
+                    context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+                } catch (e: Exception) {
+                    android.util.Log.e("WallpaperScreen", "Failed to open exact alarm settings", e)
+                }
             }
             else -> onSelectAlbum(album, lockSource.value, homeSource.value)
         }

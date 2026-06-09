@@ -142,9 +142,7 @@ class AlbumsViewModel @Inject constructor (
                                                 wallpaper.copy(
                                                     initialAlbumName = album.album.initialAlbumName,
                                                     order = existingWallpapers.size + 1 + index,
-                                                    key = album.album.initialAlbumName.hashCode() +
-                                                            folder.folderUri.hashCode() +
-                                                            wallpaper.wallpaperUri.hashCode()
+                                                    key = "${album.album.initialAlbumName}|${folder.folderUri}|${wallpaper.wallpaperUri}"
                                                 )
                                             }.toList()
                                     val combinedWallpapers = existingWallpapers + newWallpapers

@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
@@ -58,11 +60,21 @@ class LockWallpaperService: Service() {
 
     override fun onCreate() {
         super.onCreate()
-        handleThread.start()
+        if (!handleThread.isAlive) {
+            handleThread.start()
+        }
         workerHandler = Handler(handleThread.looper)
         if (!isForeground) {
             val notification = createInitialNotification()
-            startForeground(NOTIFICATION_ID, notification)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC or ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
             isForeground = true
         }
     }
@@ -118,7 +130,9 @@ class LockWallpaperService: Service() {
             setContentText(getString(R.string.changing_wallpaper))
             setSmallIcon(R.drawable.notification_icon)
             setContentIntent(pendingMainActivityIntent)
-            priority = NotificationCompat.PRIORITY_DEFAULT
+            priority = NotificationCompat.PRIORITY_MIN
+            setOngoing(true)
+            setSilent(true)
         }.build()
     }
 
@@ -127,7 +141,7 @@ class LockWallpaperService: Service() {
             enableChanger = settingsDataStoreImpl.getBoolean(SettingsConstants.ENABLE_CHANGER) ?: false,
             setHome = settingsDataStoreImpl.getBoolean(SettingsConstants.ENABLE_HOME_WALLPAPER) ?: false,
             setLock = settingsDataStoreImpl.getBoolean(SettingsConstants.ENABLE_LOCK_WALLPAPER) ?: false,
-            scaling = settingsDataStoreImpl.getString(SettingsConstants.WALLPAPER_SCALING)?.let { ScalingConstants.valueOf(it) } ?: ScalingConstants.FILL,
+            scaling = settingsDataStoreImpl.getString(SettingsConstants.WALLPAPER_SCALING)?.let { try { ScalingConstants.valueOf(it) } catch (e: IllegalArgumentException) { ScalingConstants.FILL } } ?: ScalingConstants.FILL,
             darken = settingsDataStoreImpl.getBoolean(SettingsConstants.DARKEN) ?: false,
             homeDarkenPercentage = settingsDataStoreImpl.getInt(SettingsConstants.HOME_DARKEN_PERCENTAGE) ?: 100,
             lockDarkenPercentage = settingsDataStoreImpl.getInt(SettingsConstants.LOCK_DARKEN_PERCENTAGE) ?: 100,

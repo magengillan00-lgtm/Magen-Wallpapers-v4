@@ -31,9 +31,9 @@ data class ServiceConfig(
     val type: Int? = null
 )
 
-sealed class WallpaperAction {
-    data object START : WallpaperAction()
-    data object UPDATE : WallpaperAction()
+sealed class WallpaperAction(val actionName: String) {
+    data object START : WallpaperAction("START")
+    data object UPDATE : WallpaperAction("UPDATE")
 }
 
 class WallpaperAlarmSchedulerImpl @Inject constructor(
@@ -251,16 +251,20 @@ class WallpaperAlarmSchedulerImpl @Inject constructor(
 
     private fun startService(context: Context, serviceClass: Class<*>, action: WallpaperAction, config: ServiceConfig?) {
         Log.d(TAG, "startService for ${serviceClass.simpleName}, action: ${action.javaClass.simpleName}")
-        val serviceIntent = Intent(context, serviceClass).apply {
-            this.action = action.javaClass.simpleName
-            config?.let {
-                it.homeInterval?.let { interval -> putExtra("homeInterval", interval) }
-                it.lockInterval?.let { interval -> putExtra("lockInterval", interval) }
-                it.scheduleSeparately?.let { separate -> putExtra("scheduleSeparately", separate) }
-                it.type?.let { type -> putExtra("type", type) }
+        try {
+            val serviceIntent = Intent(context, serviceClass).apply {
+                this.action = action.actionName
+                config?.let {
+                    it.homeInterval?.let { interval -> putExtra("homeInterval", interval) }
+                    it.lockInterval?.let { interval -> putExtra("lockInterval", interval) }
+                    it.scheduleSeparately?.let { separate -> putExtra("scheduleSeparately", separate) }
+                    it.type?.let { type -> putExtra("type", type) }
+                }
             }
+            context.startForegroundService(serviceIntent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start ${serviceClass.simpleName}: ${e.message}", e)
         }
-        context.startForegroundService(serviceIntent)
     }
 
     private fun postNotification(nextSetTime: LocalDateTime) {
@@ -279,7 +283,7 @@ class WallpaperAlarmSchedulerImpl @Inject constructor(
             setOnlyAlertOnce(true)
         }.build()
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(1, notification)
+        notificationManager.notify(3, notification)
     }
 
     private fun createWallpaperIntent(wallpaperAlarmItem: WallpaperAlarmItem, type: Type, origin: Int?): Intent {

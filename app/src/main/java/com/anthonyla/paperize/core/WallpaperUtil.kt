@@ -539,7 +539,7 @@ suspend fun getWallpaperFromFolder(folderUri: String, context: Context): List<Wa
                                     fileName = displayName.substringBeforeLast('.', displayName),
                                     dateModified = dateModified,
                                     order = wallpapers.size,
-                                    key = 0
+                                    key = ""
                                 )
                             )
                         }

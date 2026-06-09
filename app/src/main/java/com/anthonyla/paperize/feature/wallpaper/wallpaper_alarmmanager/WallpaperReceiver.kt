@@ -36,7 +36,11 @@ class WallpaperReceiver : BroadcastReceiver() {
                 val serviceIntent = Intent(context, HomeWallpaperService::class.java).apply {
                     action = HomeWallpaperService.Actions.REFRESH.toString()
                 }
-                context.startForegroundService(serviceIntent)
+                try {
+                    context.startForegroundService(serviceIntent)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to start refresh service", e)
+                }
             } else {
                 Log.d(TAG, "Regular wallpaper change alarm received.")
                 val homeInterval = intent.getIntExtra("homeInterval", WALLPAPER_CHANGE_INTERVAL_DEFAULT)
@@ -112,6 +116,10 @@ class WallpaperReceiver : BroadcastReceiver() {
             scheduleSeparately?.let { putExtra("scheduleSeparately", it) }
             type?.let { putExtra("type", it) }
         }
-        context.startForegroundService(serviceIntent)
+        try {
+            context.startForegroundService(serviceIntent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start foreground service: ${serviceClass.simpleName}", e)
+        }
     }
 }

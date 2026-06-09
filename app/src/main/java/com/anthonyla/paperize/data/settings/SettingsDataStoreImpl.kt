@@ -1,6 +1,7 @@
 package com.anthonyla.paperize.data.settings
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -40,9 +41,14 @@ class SettingsDataStoreImpl(private val context: Context) : SettingsDataStore {
     }
 
     override suspend fun getBoolean(key: String): Boolean? {
-        val head = context.dataStore.data.first()
-        val preferencesKey = booleanPreferencesKey(key)
-        return head[preferencesKey]
+        return try {
+            val head = context.dataStore.data.first()
+            val preferencesKey = booleanPreferencesKey(key)
+            head[preferencesKey]
+        } catch (exception: Exception) {
+            exception.printStackTrace()
+            null
+        }
     }
 
     override suspend fun getString(key: String): String? {
@@ -71,20 +77,30 @@ class SettingsDataStoreImpl(private val context: Context) : SettingsDataStore {
 
     override fun getBooleanFlow(key: String): Flow<Boolean?> = context.dataStore.data
         .catch { exception ->
-            exception.printStackTrace()
+            Log.w("SettingsDataStore", "Error reading boolean flow for key: $key", exception)
             emit(emptyPreferences())
         }
         .map { preferences ->
-            preferences[booleanPreferencesKey(key)]
+            try {
+                preferences[booleanPreferencesKey(key)]
+            } catch (e: Exception) {
+                Log.w("SettingsDataStore", "Error casting boolean for key: $key", e)
+                null
+            }
         }
 
     override fun getStringFlow(key: String): Flow<String?> = context.dataStore.data
         .catch { exception ->
-            exception.printStackTrace()
+            Log.w("SettingsDataStore", "Error reading string flow for key: $key", exception)
             emit(emptyPreferences())
         }
         .map { preferences ->
-            preferences[stringPreferencesKey(key)]
+            try {
+                preferences[stringPreferencesKey(key)]
+            } catch (e: Exception) {
+                Log.w("SettingsDataStore", "Error casting string for key: $key", e)
+                null
+            }
         }
 
     override fun getIntFlow(key: String): Flow<Int?> {
@@ -93,17 +109,21 @@ class SettingsDataStoreImpl(private val context: Context) : SettingsDataStore {
 
         return context.dataStore.data
             .catch { exception ->
-                exception.printStackTrace()
+                Log.w("SettingsDataStore", "Error reading int flow for key: $key", exception)
                 emit(emptyPreferences())
             }
             .map { preferences ->
-                val valueAsInt = preferences[intKey]
-
-                if (valueAsInt != null) {
-                    valueAsInt
-                } else {
-                    val valueAsString = preferences[stringKey]
-                    valueAsString?.toIntOrNull()
+                try {
+                    val valueAsInt = preferences[intKey]
+                    if (valueAsInt != null) {
+                        valueAsInt
+                    } else {
+                        val valueAsString = preferences[stringKey]
+                        valueAsString?.toIntOrNull()
+                    }
+                } catch (e: Exception) {
+                    Log.w("SettingsDataStore", "Error casting int for key: $key", e)
+                    null
                 }
             }
     }

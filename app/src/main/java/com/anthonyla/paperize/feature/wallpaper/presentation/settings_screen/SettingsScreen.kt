@@ -1,18 +1,18 @@
 package com.anthonyla.paperize.feature.wallpaper.presentation.settings_screen
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
-import androidx.compose.foundation.background
+import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -20,19 +20,19 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.surfaceColorAtElevation
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.lerp
-import androidx.compose.ui.unit.sp
 import com.anthonyla.paperize.R
 import com.anthonyla.paperize.feature.wallpaper.presentation.settings_screen.SettingsState.ThemeSettings
 import com.anthonyla.paperize.feature.wallpaper.presentation.settings_screen.components.AmoledListItem
@@ -46,9 +46,6 @@ import com.anthonyla.paperize.feature.wallpaper.presentation.settings_screen.com
 import com.anthonyla.paperize.feature.wallpaper.presentation.settings_screen.components.PrivacyPolicyListItem
 import com.anthonyla.paperize.feature.wallpaper.presentation.settings_screen.components.ResetListItem
 import com.anthonyla.paperize.feature.wallpaper.presentation.settings_screen.components.TranslateListItem
-import me.onebone.toolbar.CollapsingToolbarScaffold
-import me.onebone.toolbar.ScrollStrategy
-import me.onebone.toolbar.rememberCollapsingToolbarScaffoldState
 
 private object Links {
     const val TRANSLATE = "https://crowdin.com/project/paperize/invite?h=d8d7a7513d2beb0c96ba9b2a5f85473e2084922"
@@ -57,25 +54,7 @@ private object Links {
     const val IZZY = "https://apt.izzysoft.de/fdroid/index/apk/com.anthonyla.paperize"
 }
 
-private object ToolbarConfig {
-    @OptIn(ExperimentalMaterial3Api::class)
-    val LargeTopAppBarHeight = TopAppBarDefaults.LargeAppBarExpandedHeight
-    val StartPadding = 64.dp
-    val EndPadding = 16.dp
-    const val START = 30
-    const val END = 21
-    val TitleExtraStartPadding = 32.dp
-}
-
-@Composable
-private fun calculateToolbarValues(collapseFraction: Float) = with(ToolbarConfig) {
-    val firstPaddingInterpolation = lerp((EndPadding * 5 / 4), EndPadding, collapseFraction) + TitleExtraStartPadding
-    val secondPaddingInterpolation = lerp(StartPadding, (EndPadding * 5 / 4), collapseFraction)
-    val dynamicPaddingStart = lerp(firstPaddingInterpolation, secondPaddingInterpolation, collapseFraction)
-    val textSize = (END + (START - END) * collapseFraction).sp
-    Pair(dynamicPaddingStart, textSize)
-}
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     themeSettings: ThemeSettings,
@@ -89,56 +68,44 @@ fun SettingsScreen(
     onContactClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val topBarState = rememberCollapsingToolbarScaffoldState()
-    val (dynamicPaddingStart, textSize) = calculateToolbarValues(topBarState.toolbarState.progress)
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
-    Scaffold {
-        CollapsingToolbarScaffold(
-            state = topBarState,
-            modifier = Modifier.fillMaxSize().padding(it),
-            scrollStrategy = ScrollStrategy.ExitUntilCollapsed,
-            toolbar = {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(ToolbarConfig.LargeTopAppBarHeight)
-                        .background(MaterialTheme.colorScheme.surfaceColorAtElevation(5.dp))
-                        .pin()
-                )
-                IconButton(
-                    onClick = onBackClick,
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .size(24.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(id = R.string.home_screen)
+    Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            LargeTopAppBar(
+                title = {
+                    Text(
+                        text = stringResource(id = R.string.settings_screen),
+                        style = MaterialTheme.typography.headlineMedium
                     )
-                }
-                Text(
-                    text = stringResource(id = R.string.settings_screen),
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = textSize,
-                    modifier = Modifier
-                        .road(Alignment.CenterStart, Alignment.BottomStart)
-                        .padding(dynamicPaddingStart, 16.dp, 16.dp, 16.dp),
-                )
-            }
-        ) {
-            SettingsContent(
-                themeSettings = themeSettings,
-                onDarkModeClick = onDarkModeClick,
-                onAmoledClick = onAmoledClick,
-                onDynamicThemingClick = onDynamicThemingClick,
-                onAnimateClick = onAnimateClick,
-                onPrivacyClick = onPrivacyClick,
-                onResetClick = onResetClick,
-                onContactClick = onContactClick,
-                context = context
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(id = R.string.home_screen)
+                        )
+                    }
+                },
+                scrollBehavior = scrollBehavior
             )
         }
+    ) { paddingValues ->
+        SettingsContent(
+            themeSettings = themeSettings,
+            onDarkModeClick = onDarkModeClick,
+            onAmoledClick = onAmoledClick,
+            onDynamicThemingClick = onDynamicThemingClick,
+            onAnimateClick = onAnimateClick,
+            onPrivacyClick = onPrivacyClick,
+            onResetClick = onResetClick,
+            onContactClick = onContactClick,
+            context = context,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        )
     }
 }
 
@@ -152,14 +119,14 @@ private fun SettingsContent(
     onPrivacyClick: () -> Unit,
     onResetClick: () -> Unit,
     onContactClick: () -> Unit,
-    context: android.content.Context
+    context: android.content.Context,
+    modifier: Modifier = Modifier
 ) {
     Column(
         horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.Top,
-        modifier = Modifier
+        modifier = modifier
             .verticalScroll(rememberScrollState())
-            .fillMaxSize()
             .padding(horizontal = 24.dp)
     ) {
         AppearanceSection(themeSettings, onDarkModeClick, onAmoledClick, onDynamicThemingClick, onAnimateClick)
@@ -201,6 +168,21 @@ private fun AppearanceSection(
     Spacer(modifier = Modifier.height(16.dp))
 }
 
+private fun safeStartActivity(context: android.content.Context, intent: Intent, errorMsg: String = "Unable to open") {
+    try {
+        context.startActivity(intent)
+    } catch (e: ActivityNotFoundException) {
+        Log.e("SettingsScreen", errorMsg, e)
+        Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+    } catch (e: SecurityException) {
+        Log.e("SettingsScreen", errorMsg, e)
+        Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+    } catch (e: Exception) {
+        Log.e("SettingsScreen", errorMsg, e)
+        Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+    }
+}
+
 @Composable
 private fun AboutSection(
     context: android.content.Context,
@@ -215,11 +197,11 @@ private fun AboutSection(
             action = Settings.ACTION_APP_NOTIFICATION_SETTINGS
             putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
         }
-        context.startActivity(intent)
+        safeStartActivity(context, intent, "Unable to open notification settings")
     }
     Spacer(modifier = Modifier.height(16.dp))
     TranslateListItem {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Links.TRANSLATE)))
+        safeStartActivity(context, Intent(Intent.ACTION_VIEW, Uri.parse(Links.TRANSLATE)), "Unable to open translation page")
     }
     Spacer(modifier = Modifier.height(16.dp))
     PrivacyPolicyListItem(onPrivacyClick)
@@ -227,9 +209,9 @@ private fun AboutSection(
     ContactListItem(onContactClick)
     Spacer(modifier = Modifier.height(16.dp))
     AutoWallpaperChangerProListItem(
-        onGitHubClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Links.GITHUB))) },
-        onFdroidClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Links.FDROID))) },
-        onIzzyOnDroidClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Links.IZZY))) }
+        onGitHubClick = { safeStartActivity(context, Intent(Intent.ACTION_VIEW, Uri.parse(Links.GITHUB)), "Unable to open GitHub") },
+        onFdroidClick = { safeStartActivity(context, Intent(Intent.ACTION_VIEW, Uri.parse(Links.FDROID)), "Unable to open F-Droid") },
+        onIzzyOnDroidClick = { safeStartActivity(context, Intent(Intent.ACTION_VIEW, Uri.parse(Links.IZZY)), "Unable to open IzzyOnDroid") }
     )
     Spacer(modifier = Modifier.height(16.dp))
     ResetListItem(onResetClick)

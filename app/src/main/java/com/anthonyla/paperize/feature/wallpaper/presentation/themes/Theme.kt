@@ -140,9 +140,11 @@ fun AutoWallpaperChangerProTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as Activity).window
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !isDarkMode
-            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !isDarkMode
+            val activity = view.context as? Activity
+            activity?.window?.let { window ->
+                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !isDarkMode
+                WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !isDarkMode
+            }
         }
     }
 

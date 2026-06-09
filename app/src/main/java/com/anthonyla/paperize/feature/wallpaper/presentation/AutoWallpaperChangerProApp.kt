@@ -121,6 +121,8 @@ fun AutoWallpaperChangerProApp(
                 onSettingsClick = { navController.navigate(Settings) },
                 onNavigateAddWallpaper = { navController.navigate(AddAlbum(it)) },
                 onViewAlbum = { navController.navigate(AlbumView(it)) },
+                addAlbumViewModel = addAlbumViewModel,
+                albumsViewModel = albumsViewModel,
                 onHomeTimeChange = { timeInMinutes ->
                     settingsViewModel.onEvent(SettingsEvent.SetHomeWallpaperInterval(timeInMinutes))
                     if (settingsState.value.wallpaperSettings.enableChanger) {
@@ -532,6 +534,15 @@ fun AutoWallpaperChangerProApp(
                 },
                 onChangeOnUnlockChange = { changeOnUnlock ->
                     settingsViewModel.onEvent(SettingsEvent.SetChangeOnUnlock(changeOnUnlock))
+                    // Register/unregister the dynamic unlock receiver based on setting
+                    val app = context.applicationContext as? com.anthonyla.paperize.App
+                    if (app != null) {
+                        if (changeOnUnlock && settingsState.value.wallpaperSettings.enableChanger) {
+                            app.registerUnlockReceiver()
+                        } else {
+                            app.unregisterUnlockReceiver()
+                        }
+                    }
                 }
             )
         }
@@ -580,12 +591,13 @@ fun AutoWallpaperChangerProApp(
 
         // Navigate to the folder view screen to view wallpapers in a folder
         animatedScreen<FolderView>(animate = settingsState.value.themeSettings.animate) {
-            if (folderState.value.folder == null || folderState.value.folder!!.wallpapers.isEmpty()) {
+            val currentFolder = folderState.value.folder
+            if (currentFolder == null || currentFolder.wallpapers.isEmpty()) {
                 navController.navigateUp()
             }
             else {
                 FolderViewScreen(
-                    folder = folderState.value.folder!!,
+                    folder = currentFolder,
                     onBackClick = { navController.navigateUp() },
                     onShowWallpaperView = { uri, name ->
                         navController.navigate(WallpaperView(uri, name))

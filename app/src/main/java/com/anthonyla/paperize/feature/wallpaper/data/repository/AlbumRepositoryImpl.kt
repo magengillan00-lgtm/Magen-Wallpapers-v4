@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import java.util.Objects
 
 class AlbumRepositoryImpl(
     private val dao: AlbumDao,
@@ -40,9 +41,24 @@ class AlbumRepositoryImpl(
 
     override suspend fun upsertAlbumWithWallpaperAndFolder(albumWithWallpaperAndFolder: AlbumWithWallpaperAndFolder) {
         withContext(dispatcher) {
+            val albumName = albumWithWallpaperAndFolder.album.initialAlbumName
+
+            // Use collision-resistant String keys: "albumName|uri"
+            // This avoids Integer hashCode collisions that could cause data loss
+            val safeWallpapers = albumWithWallpaperAndFolder.wallpapers.map { w ->
+                w.copy(key = "$albumName|${w.wallpaperUri}")
+            }
+            val safeFolders = albumWithWallpaperAndFolder.folders.map { f ->
+                f.copy(key = "$albumName|${f.folderUri}")
+            }
+
+            // Delete existing wallpapers and folders for THIS album only before re-inserting
+            dao.cascadeDeleteWallpaper(albumName)
+            dao.cascadeDeleteFolder(albumName)
+
             dao.upsertAlbum(albumWithWallpaperAndFolder.album)
-            dao.upsertWallpaperList(albumWithWallpaperAndFolder.wallpapers)
-            dao.upsertFolderList(albumWithWallpaperAndFolder.folders)
+            dao.upsertWallpaperList(safeWallpapers)
+            dao.upsertFolderList(safeFolders)
         }
     }
 

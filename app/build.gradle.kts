@@ -34,11 +34,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.anthonyla.paperize"
+        applicationId = "com.magen.wallpapers"
         minSdk = 31
         targetSdk = 36
-        versionCode = 42
-        versionName = "3.2.1"
+        versionCode = 3
+        versionName = "3.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -89,7 +89,7 @@ android {
         this.outputs
             .map { it as com.android.build.gradle.internal.api.ApkVariantOutputImpl }
             .forEach { output ->
-                val apkName = "paperize-v${this.versionName}.apk"
+                val apkName = "magen-wallpapers-v${this.versionName}.apk"
                 output.outputFileName = apkName
             }
     }

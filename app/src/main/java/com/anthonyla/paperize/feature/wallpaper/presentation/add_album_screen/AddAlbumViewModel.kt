@@ -2,6 +2,7 @@ package com.anthonyla.paperize.feature.wallpaper.presentation.add_album_screen
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.anthonyla.paperize.core.compress
@@ -42,7 +43,7 @@ class AddAlbumViewModel @Inject constructor(
                     val wallpapers = _state.value.wallpapers.map {
                         it.copy(
                             initialAlbumName = event.initialAlbumName,
-                            key = event.initialAlbumName.hashCode() + it.wallpaperUri.hashCode()
+                            key = "${event.initialAlbumName}|${it.wallpaperUri}"
                         )
                     }
                     var totalWallpapers = _state.value.wallpapers.size
@@ -50,14 +51,14 @@ class AddAlbumViewModel @Inject constructor(
                         val updatedWallpapers = folder.wallpapers.map {
                             it.copy(
                                 initialAlbumName = event.initialAlbumName,
-                                key = event.initialAlbumName.hashCode() + folder.folderUri.hashCode() + it.wallpaperUri.hashCode(),
+                                key = "${event.initialAlbumName}|${folder.folderUri}|${it.wallpaperUri}",
                                 order = it.order + totalWallpapers
                             )
                         }
                         totalWallpapers += folder.wallpapers.size
                         folder.copy(
                             initialAlbumName = event.initialAlbumName,
-                            key = event.initialAlbumName.hashCode() + folder.hashCode(),
+                            key = "${event.initialAlbumName}|${folder.folderUri}",
                             coverUri = updatedWallpapers.firstOrNull()?.wallpaperUri ?: folder.coverUri,
                             wallpapers = updatedWallpapers
                         )
@@ -77,6 +78,17 @@ class AddAlbumViewModel @Inject constructor(
                     )
                     repository.upsertAlbumWithWallpaperAndFolder(albumWithWallpaperAndFolder)
                     _state.update { AddAlbumState() }
+                }
+            }
+
+            is AddAlbumEvent.SaveAlbumDirect -> {
+                viewModelScope.launch {
+                    try {
+                        repository.upsertAlbumWithWallpaperAndFolder(event.albumWithWallpaperAndFolder)
+                        _state.update { AddAlbumState() }
+                    } catch (e: Exception) {
+                        Log.e("AddAlbumViewModel", "Error saving album directly", e)
+                    }
                 }
             }
 
@@ -116,7 +128,7 @@ class AddAlbumViewModel @Inject constructor(
                                 fileName = metadata.filename,
                                 dateModified = metadata.lastModified,
                                 order = index + _state.value.wallpapers.size,
-                                key = 0
+                                key = ""
                             )
                         }
                     )
@@ -147,7 +159,7 @@ class AddAlbumViewModel @Inject constructor(
                         coverUri = wallpapers.firstOrNull()?.wallpaperUri ?: "",
                         dateModified = metadata.lastModified,
                         order = if (_state.value.folders.isEmpty()) 0 else _state.value.folders.size,
-                        key = 0
+                        key = ""
                     )
                     _state.update {
                         it.copy(

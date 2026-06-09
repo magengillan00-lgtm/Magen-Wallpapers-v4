@@ -2,6 +2,7 @@ package com.anthonyla.paperize.feature.wallpaper.presentation.startup_screen
 
 import android.app.Activity
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -36,17 +38,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.airbnb.lottie.compose.LottieAnimation
-import com.airbnb.lottie.compose.LottieCompositionSpec
-import com.airbnb.lottie.compose.LottieConstants
-import com.airbnb.lottie.compose.animateLottieCompositionAsState
-import com.airbnb.lottie.compose.rememberLottieComposition
 import com.anthonyla.paperize.R
 import kotlinx.coroutines.launch
 
@@ -56,11 +55,6 @@ import kotlinx.coroutines.launch
 fun StartupScreen(
     onAgree: () -> Unit
 ) {
-    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.onboarding_animation))
-    val progress by animateLottieCompositionAsState(
-        composition = composition,
-        iterations = LottieConstants.IterateForever,
-    )
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var showToS by remember { mutableStateOf(false) }
@@ -89,17 +83,18 @@ fun StartupScreen(
                 Spacer(modifier = Modifier.height(120.dp))
                 Text(text = stringResource(R.string.welcome), style = MaterialTheme.typography.headlineLarge)
                 Spacer(modifier = Modifier.height(16.dp))
-                LottieAnimation(
-                    composition = composition,
-                    progress = { progress },
+                // Anime girl mascot image replacing the Lottie panda animation
+                Image(
+                    painter = painterResource(id = R.drawable.anime_mascot),
+                    contentDescription = context.getString(R.string.welcome_animation),
                     modifier = Modifier
                         .fillMaxHeight(0.5f)
+                        .fillMaxWidth()
                         .align(Alignment.CenterHorizontally)
                         .semantics {
                             contentDescription = context.getString(R.string.welcome_animation)
                         },
-                    safeMode = true,
-                    enableMergePaths = true
+                    contentScale = ContentScale.Fit
                 )
                 Icon(
                     imageVector = Icons.Outlined.Info,

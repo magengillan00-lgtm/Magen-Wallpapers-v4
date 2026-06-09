@@ -2,6 +2,7 @@ package com.anthonyla.paperize.feature.wallpaper.presentation.settings_screen
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.util.Log
 import com.anthonyla.paperize.core.ScalingConstants
 import com.anthonyla.paperize.core.SettingsConstants
 import com.anthonyla.paperize.core.SettingsConstants.WALLPAPER_CHANGE_INTERVAL_DEFAULT
@@ -36,25 +37,31 @@ class SettingsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            combine(
-                settingsDataStoreImpl.getBooleanFlow(SettingsConstants.FIRST_LAUNCH),
-                loadThemeSettingsFlow(),
-                loadWallpaperSettingsFlow(),
-                loadScheduleSettingsFlow(),
-                loadEffectSettingsFlow()
-            ) { firstLaunch, themeSettings, wallpaperSettings, scheduleSettings, effectSettings ->
-                    _state.update {
-                    it.copy(
-                        firstLaunch = firstLaunch ?: true,
-                        initialized = true,
-                        themeSettings = themeSettings,
-                        wallpaperSettings = wallpaperSettings,
-                        scheduleSettings = scheduleSettings,
-                        effectSettings = effectSettings
-                    )
-                }
+            try {
+                combine(
+                    settingsDataStoreImpl.getBooleanFlow(SettingsConstants.FIRST_LAUNCH).catch { emit(null) },
+                    loadThemeSettingsFlow().catch { emit(ThemeSettings()) },
+                    loadWallpaperSettingsFlow().catch { emit(WallpaperSettings()) },
+                    loadScheduleSettingsFlow().catch { emit(ScheduleSettings()) },
+                    loadEffectSettingsFlow().catch { emit(EffectSettings()) }
+                ) { firstLaunch, themeSettings, wallpaperSettings, scheduleSettings, effectSettings ->
+                        _state.update {
+                        it.copy(
+                            firstLaunch = firstLaunch ?: true,
+                            initialized = true,
+                            themeSettings = themeSettings,
+                            wallpaperSettings = wallpaperSettings,
+                            scheduleSettings = scheduleSettings,
+                            effectSettings = effectSettings
+                        )
+                    }
+                    setKeepOnScreenCondition = false
+                }.collect()
+            } catch (e: Exception) {
+                Log.e("SettingsViewModel", "Error loading settings", e)
+                _state.update { it.copy(initialized = true) }
                 setKeepOnScreenCondition = false
-            }.collect()
+            }
         }
     }
 
@@ -72,6 +79,12 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
+    private fun safeScalingConstants(name: String?): ScalingConstants = try {
+        if (name != null) ScalingConstants.valueOf(name) else ScalingConstants.FILL
+    } catch (e: IllegalArgumentException) {
+        ScalingConstants.FILL
+    }
+
     private fun loadWallpaperSettingsFlow(): Flow<WallpaperSettings> = combine(
         settingsDataStoreImpl.getBooleanFlow(SettingsConstants.ENABLE_CHANGER),
         settingsDataStoreImpl.getBooleanFlow(SettingsConstants.ENABLE_HOME_WALLPAPER),
@@ -85,16 +98,21 @@ class SettingsViewModel @Inject constructor(
         settingsDataStoreImpl.getStringFlow(SettingsConstants.WALLPAPER_SCALING)
     ) { flows ->
         WallpaperSettings(
-            enableChanger = flows[0] as Boolean? ?: false,
-            setHomeWallpaper = flows[1] as Boolean? ?: false,
-            setLockWallpaper = flows[2] as Boolean? ?: false,
-            currentHomeWallpaper = flows[3] as String?,
-            currentLockWallpaper = flows[4] as String?,
-            nextHomeWallpaper = flows[5] as String?,
-            nextLockWallpaper = flows[6] as String?,
-            homeAlbumName = flows[7] as String?,
-            lockAlbumName = flows[8] as String?,
-            wallpaperScaling = ScalingConstants.valueOf((flows[9] as String?) ?: ScalingConstants.FILL.name)
+            enableChanger = flows[0] as? Boolean ?: false,
+            setHomeWallpaper = flows[1] as? Boolean ?: false,
+            setLockWallpaper = flows[2] as? Boolean ?: false,
+            currentHomeWallpaper = flows[3] as? String,
+            currentLockWallpaper = flows[4] as? String,
+            nextHomeWallpaper = flows[5] as? String,
+            nextLockWallpaper = flows[6] as? String,
+            homeAlbumName = flows[7] as? String,
+            lockAlbumName = flows[8] as? String,
+            wallpaperScaling = try {
+                val scalingName = flows[9] as? String
+                if (scalingName != null) ScalingConstants.valueOf(scalingName) else ScalingConstants.FILL
+            } catch (e: IllegalArgumentException) {
+                ScalingConstants.FILL
+            }
         )
     }
 
@@ -114,18 +132,18 @@ class SettingsViewModel @Inject constructor(
         settingsDataStoreImpl.getBooleanFlow(SettingsConstants.CHANGE_ON_UNLOCK)
     ) { flows ->
         ScheduleSettings(
-            scheduleSeparately = flows[0] as Boolean? ?: false,
-            homeInterval = flows[1] as Int? ?: WALLPAPER_CHANGE_INTERVAL_DEFAULT,
-            lockInterval = flows[2] as Int? ?: WALLPAPER_CHANGE_INTERVAL_DEFAULT,
-            lastSetTime = flows[3] as String?,
-            nextSetTime = flows[4] as String?,
-            changeStartTime = flows[5] as Boolean? ?: false,
-            startTime = Pair(flows[6] as Int? ?: 0, flows[7] as Int? ?: 0),
-            shuffle = flows[8] as Boolean? ?: true,
-            refresh = flows[9] as Boolean? ?: true,
-            skipLandscape = flows[10] as Boolean? ?: false,
-            skipNonInteractive = flows[11] as Boolean? ?: false,
-            changeOnUnlock = flows[12] as Boolean? ?: false,
+            scheduleSeparately = flows[0] as? Boolean ?: false,
+            homeInterval = flows[1] as? Int ?: WALLPAPER_CHANGE_INTERVAL_DEFAULT,
+            lockInterval = flows[2] as? Int ?: WALLPAPER_CHANGE_INTERVAL_DEFAULT,
+            lastSetTime = flows[3] as? String,
+            nextSetTime = flows[4] as? String,
+            changeStartTime = flows[5] as? Boolean ?: false,
+            startTime = Pair(flows[6] as? Int ?: 0, flows[7] as? Int ?: 0),
+            shuffle = flows[8] as? Boolean ?: true,
+            refresh = flows[9] as? Boolean ?: true,
+            skipLandscape = flows[10] as? Boolean ?: false,
+            skipNonInteractive = flows[11] as? Boolean ?: false,
+            changeOnUnlock = flows[12] as? Boolean ?: false,
         )
     }
 
@@ -144,18 +162,18 @@ class SettingsViewModel @Inject constructor(
         settingsDataStoreImpl.getIntFlow(SettingsConstants.LOCK_GRAYSCALE_PERCENTAGE)
     ) { flows ->
         EffectSettings(
-            darken = flows[0] as Boolean? ?: false,
-            homeDarkenPercentage = flows[1] as Int? ?: 100,
-            lockDarkenPercentage = flows[2] as Int? ?: 100,
-            blur = flows[3] as Boolean? ?: false,
-            homeBlurPercentage = flows[4] as Int? ?: 0,
-            lockBlurPercentage = flows[5] as Int? ?: 0,
-            vignette = flows[6] as Boolean? ?: false,
-            homeVignettePercentage = flows[7] as Int? ?: 0,
-            lockVignettePercentage = flows[8] as Int? ?: 0,
-            grayscale = flows[9] as Boolean? ?: false,
-            homeGrayscalePercentage = flows[10] as Int? ?: 0,
-            lockGrayscalePercentage = flows[11] as Int? ?: 0
+            darken = flows[0] as? Boolean ?: false,
+            homeDarkenPercentage = flows[1] as? Int ?: 100,
+            lockDarkenPercentage = flows[2] as? Int ?: 100,
+            blur = flows[3] as? Boolean ?: false,
+            homeBlurPercentage = flows[4] as? Int ?: 0,
+            lockBlurPercentage = flows[5] as? Int ?: 0,
+            vignette = flows[6] as? Boolean ?: false,
+            homeVignettePercentage = flows[7] as? Int ?: 0,
+            lockVignettePercentage = flows[8] as? Int ?: 0,
+            grayscale = flows[9] as? Boolean ?: false,
+            homeGrayscalePercentage = flows[10] as? Int ?: 0,
+            lockGrayscalePercentage = flows[11] as? Int ?: 0
         )
     }
 
@@ -242,7 +260,7 @@ class SettingsViewModel @Inject constructor(
                     if (_state.value.scheduleSettings.scheduleSeparately) {
                         val homeNextSetTime = currentTime.plusMinutes(event.interval.toLong())
                         val lockNextSetTime = currentTime.plusMinutes(_state.value.scheduleSettings.lockInterval.toLong())
-                        nextSetTime = (if (homeNextSetTime!!.isBefore(lockNextSetTime)) homeNextSetTime else lockNextSetTime)!!.format(formatter)
+                        nextSetTime = (if (homeNextSetTime.isBefore(lockNextSetTime)) homeNextSetTime else lockNextSetTime).format(formatter)
                         settingsDataStoreImpl.putString(SettingsConstants.NEXT_SET_TIME, nextSetTime)
                         settingsDataStoreImpl.putString(SettingsConstants.HOME_NEXT_SET_TIME, homeNextSetTime.toString())
                         settingsDataStoreImpl.putString(SettingsConstants.LOCK_NEXT_SET_TIME, lockNextSetTime.toString())
@@ -271,7 +289,7 @@ class SettingsViewModel @Inject constructor(
                     if (_state.value.scheduleSettings.scheduleSeparately) {
                         val nextSetTime1 = currentTime.plusMinutes(_state.value.scheduleSettings.homeInterval.toLong())
                         val nextSetTime2 = currentTime.plusMinutes(event.interval.toLong())
-                        nextSetTime = (if (nextSetTime1!!.isBefore(nextSetTime2)) nextSetTime1 else nextSetTime2)!!.format(formatter)
+                        nextSetTime = (if (nextSetTime1.isBefore(nextSetTime2)) nextSetTime1 else nextSetTime2).format(formatter)
                         settingsDataStoreImpl.putString(SettingsConstants.NEXT_SET_TIME, nextSetTime)
                         settingsDataStoreImpl.putString(SettingsConstants.HOME_NEXT_SET_TIME, nextSetTime1.toString())
                         settingsDataStoreImpl.putString(SettingsConstants.LOCK_NEXT_SET_TIME, nextSetTime2.toString())

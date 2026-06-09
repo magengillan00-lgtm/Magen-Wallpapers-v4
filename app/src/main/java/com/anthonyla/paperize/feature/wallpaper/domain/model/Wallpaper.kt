@@ -18,5 +18,5 @@ data class Wallpaper(
     val fileName: String,
     val dateModified: Long,
     val order: Int,
-    @PrimaryKey(autoGenerate = false) val key: Int
+    @PrimaryKey(autoGenerate = false) val key: String
 )

@@ -11,6 +11,9 @@ sealed class AddAlbumEvent {
     data class SaveAlbum(
         val initialAlbumName: String
     ): AddAlbumEvent()
+    data class SaveAlbumDirect(
+        val albumWithWallpaperAndFolder: com.anthonyla.paperize.feature.wallpaper.domain.model.AlbumWithWallpaperAndFolder
+    ): AddAlbumEvent()
     data class AddWallpapers(
         val wallpaperUris: List<String>
     ): AddAlbumEvent()

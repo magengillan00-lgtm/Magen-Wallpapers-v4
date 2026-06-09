@@ -71,7 +71,7 @@ class AlbumScreenViewModel @Inject constructor(
                             fileName = metadata.filename,
                             dateModified = metadata.lastModified,
                             order = if (album.wallpapers.isEmpty()) 0 else album.wallpapers.size + index,
-                            key = _state.value.initialAlbumName.hashCode() + uri.hashCode()
+                            key = "${_state.value.initialAlbumName}|$uri"
                         )
                     }
                     var totalWallpapers = album.wallpapers.size + wallpapers.size
@@ -109,7 +109,7 @@ class AlbumScreenViewModel @Inject constructor(
                     val wallpapers = getWallpaperFromFolder(event.directoryUri, context).mapIndexed { index, wallpaper ->
                         wallpaper.copy(
                             initialAlbumName = _state.value.initialAlbumName,
-                            key = _state.value.initialAlbumName.hashCode() + event.directoryUri.hashCode() + wallpaper.wallpaperUri.hashCode(),
+                            key = "${_state.value.initialAlbumName}|${event.directoryUri}|${wallpaper.wallpaperUri}",
                             order = index + album.wallpapers.size + album.folders.sumOf { it.wallpapers.size }
                         )
                     }
@@ -122,7 +122,7 @@ class AlbumScreenViewModel @Inject constructor(
                         dateModified = metadata.lastModified,
                         wallpapers = wallpapers,
                         order = album.folders.size,
-                        key = _state.value.initialAlbumName.hashCode() + event.directoryUri.hashCode()
+                        key = "${_state.value.initialAlbumName}|${event.directoryUri}"
                     )
                     repository.upsertFolder(folder)
                     _state.update {

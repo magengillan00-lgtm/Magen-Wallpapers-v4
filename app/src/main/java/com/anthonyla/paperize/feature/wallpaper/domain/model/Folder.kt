@@ -23,5 +23,5 @@ data class Folder(
     val dateModified: Long,
     val wallpapers: List<Wallpaper> = emptyList(),
     val order: Int,
-    @PrimaryKey(autoGenerate = false) val key: Int
+    @PrimaryKey(autoGenerate = false) val key: String
 )
