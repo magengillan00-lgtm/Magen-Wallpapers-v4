@@ -150,7 +150,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     tonalElevation = 5.dp
                 ) {
-                    AutoWallpaperChangerProApp(isFirstLaunch ?: true, scheduler)
+                    AutoWallpaperChangerProApp(isFirstLaunch ?: true, scheduler, settingsDataStoreImpl)
                 }
             }
         }
@@ -198,36 +198,26 @@ class MainActivity : ComponentActivity() {
         }
 
         if (shouldScheduleAlarm) {
-            val canScheduleExactAlarms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
-                alarmManager.canScheduleExactAlarms()
-            } else {
-                true
-            }
+            // Always try to schedule; the scheduler will fall back to inexact alarms if needed
+            scheduleWallpaperAlarm(settings, scheduler)
 
-            if (canScheduleExactAlarms) {
-                scheduleWallpaperAlarm(settings, scheduler)
-            } else {
-                // Optionally prompt user to grant permission
-                requestExactAlarmPermissionIfNeeded(this)
+            // Also prompt for exact alarm permission if not granted
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
+                if (!alarmManager.canScheduleExactAlarms()) {
+                    requestExactAlarmPermissionIfNeeded(this)
+                }
             }
         }
     }
 
-    @RequiresPermission(Manifest.permission.SCHEDULE_EXACT_ALARM)
+    @SuppressLint("MissingPermission")
     private suspend fun scheduleWallpaperAlarm(
         settings: SettingsState,
         scheduler: WallpaperAlarmSchedulerImpl
     ) {
         val scheduleSettings = settings.scheduleSettings
         val wallpaperSettings = settings.wallpaperSettings
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val am = getSystemService(ALARM_SERVICE) as AlarmManager
-            if (!am.canScheduleExactAlarms()) {
-                return
-            }
-        }
 
         scheduler.scheduleWallpaperAlarm(
             WallpaperAlarmItem(

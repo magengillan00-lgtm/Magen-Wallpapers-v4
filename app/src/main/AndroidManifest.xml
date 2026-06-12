@@ -24,6 +24,12 @@
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.AutoWallpaperChangerPro" tools:targetApi="tiramisu">
+
+        <!-- Property required for Android 14+ when using specialUse foreground service type -->
+        <property
+            android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+            android:value="Automatic wallpaper changing service that processes and applies wallpaper images on a scheduled basis" />
+
         <activity
             android:name=".feature.wallpaper.presentation.MainActivity"
             android:windowSoftInputMode="adjustResize"
@@ -38,17 +44,20 @@
         <activity android:name=".feature.wallpaper.app_shortcut.BroadcastActivity"
             android:theme="@android:style/Theme.NoDisplay">
         </activity>
-        <receiver android:name=".feature.wallpaper.wallpaper_alarmmanager.WallpaperReceiver" />
+        <receiver android:name=".feature.wallpaper.wallpaper_alarmmanager.WallpaperReceiver"
+            android:exported="false" />
         <service android:name=".feature.wallpaper.wallpaper_service.HomeWallpaperService"
-            android:foregroundServiceType="dataSync|specialUse" />
+            android:foregroundServiceType="dataSync|specialUse"
+            android:exported="false" />
         <service android:name=".feature.wallpaper.wallpaper_service.LockWallpaperService"
-            android:foregroundServiceType="dataSync|specialUse" />
+            android:foregroundServiceType="dataSync|specialUse"
+            android:exported="false" />
         <service
             android:name=".feature.wallpaper.wallpaper_tile.ChangeWallpaperTileService"
             android:exported="true"
             android:label="@string/change_wallpaper"
             android:icon="@drawable/notification_icon"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            android:permission="android.service.quicksettings.BIND_QUICK_SETTINGS_TILE">
             <intent-filter> <action android:name="android.service.quicksettings.action.QS_TILE" /> </intent-filter>
         </service>
         <receiver android:name=".feature.wallpaper.wallpaper_alarmmanager.WallpaperBootAndChangeReceiver"
@@ -97,4 +106,3 @@
         </activity>
     </application>
 </manifest>
-

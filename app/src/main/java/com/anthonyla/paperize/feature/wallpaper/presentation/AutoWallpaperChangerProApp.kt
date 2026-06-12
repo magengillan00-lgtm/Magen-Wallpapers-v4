@@ -56,6 +56,8 @@ import com.anthonyla.paperize.feature.wallpaper.util.navigation.SortView
 import com.anthonyla.paperize.feature.wallpaper.util.navigation.Startup
 import com.anthonyla.paperize.feature.wallpaper.util.navigation.WallpaperView
 import com.anthonyla.paperize.feature.wallpaper.util.navigation.animatedScreen
+import com.anthonyla.paperize.core.SettingsConstants
+import com.anthonyla.paperize.data.settings.SettingsDataStore
 import com.anthonyla.paperize.feature.wallpaper.wallpaper_alarmmanager.WallpaperAlarmItem
 import com.anthonyla.paperize.feature.wallpaper.wallpaper_alarmmanager.WallpaperAlarmSchedulerImpl
 import kotlinx.coroutines.CoroutineScope
@@ -68,6 +70,7 @@ import kotlinx.coroutines.launch
 fun AutoWallpaperChangerProApp(
     firstLaunch: Boolean,
     scheduler : WallpaperAlarmSchedulerImpl,
+    settingsDataStore: SettingsDataStore,
     albumsViewModel: AlbumsViewModel = hiltViewModel(),
     settingsViewModel: SettingsViewModel = hiltViewModel(),
     albumScreenViewModel: AlbumScreenViewModel = hiltViewModel(),
@@ -735,12 +738,18 @@ private fun CoroutineScope.scheduleWallpaperUpdate(
             shuffle = settingsState.scheduleSettings.shuffle
         )
 
+        // Read next times from DataStore for proper rescheduling
+        val homeNextTime = settingsDataStore.getString(SettingsConstants.HOME_NEXT_SET_TIME)
+        val lockNextTime = settingsDataStore.getString(SettingsConstants.LOCK_NEXT_SET_TIME)
+
         scheduler.scheduleWallpaperAlarm(
             wallpaperAlarmItem = alarmItem,
             origin = origin,
             changeImmediate = changeImmediate,
             cancelImmediate = cancelImmediate,
-            firstLaunch = firstLaunch
+            firstLaunch = firstLaunch,
+            homeNextTime = homeNextTime,
+            lockNextTime = lockNextTime
         )
         WallpaperAlarmSchedulerImpl.scheduleRefresh(context, settingsState.scheduleSettings.refresh)
     }

@@ -3,6 +3,7 @@ package com.anthonyla.paperize.feature.wallpaper.wallpaper_alarmmanager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.PowerManager
 import android.util.Log
 import com.anthonyla.paperize.core.SettingsConstants
 import com.anthonyla.paperize.core.SettingsConstants.WALLPAPER_CHANGE_INTERVAL_DEFAULT
@@ -26,11 +27,18 @@ class WallpaperReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "WallpaperReceiver"
+        private const val WAKELOCK_TAG = "Paperize:WallpaperReceiver"
+        private const val WAKELOCK_TIMEOUT_MS = 5 * 60 * 1000L // 5 minutes max
     }
+
+    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onReceive(context: Context?, intent: Intent?) {
         Log.d(TAG, "onReceive triggered.")
         if (context != null && intent != null) {
+            // Acquire a WakeLock to ensure the CPU stays awake while we process the alarm
+            acquireWakeLock(context)
+
             val refresh = intent.getBooleanExtra("refresh", false)
             if (refresh) {
                 val serviceIntent = Intent(context, HomeWallpaperService::class.java).apply {
@@ -40,6 +48,7 @@ class WallpaperReceiver : BroadcastReceiver() {
                     context.startForegroundService(serviceIntent)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to start refresh service", e)
+                    releaseWakeLock()
                 }
             } else {
                 Log.d(TAG, "Regular wallpaper change alarm received.")
@@ -75,7 +84,6 @@ class WallpaperReceiver : BroadcastReceiver() {
                         val currentTime = LocalDateTime.now()
                         settingsDataStore.putString(SettingsConstants.LAST_SET_TIME, currentTime.format(formatter))
 
-
                         val homeNext = settingsDataStore.getString(SettingsConstants.HOME_NEXT_SET_TIME)
                         val lockNext = settingsDataStore.getString(SettingsConstants.LOCK_NEXT_SET_TIME)
 
@@ -100,11 +108,43 @@ class WallpaperReceiver : BroadcastReceiver() {
                             homeNextTime = homeNext,
                             lockNextTime = lockNext,
                         )
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error rescheduling alarm", e)
                     } finally {
                         pendingResult.finish()
+                        releaseWakeLock()
                     }
                 }
             }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun acquireWakeLock(context: Context) {
+        try {
+            if (wakeLock?.isHeld == true) return
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                WAKELOCK_TAG
+            ).apply {
+                acquire(WAKELOCK_TIMEOUT_MS)
+            }
+            Log.d(TAG, "WakeLock acquired")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acquire WakeLock", e)
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+                Log.d(TAG, "WakeLock released")
+            }
+            wakeLock = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to release WakeLock", e)
         }
     }
 

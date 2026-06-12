@@ -69,17 +69,31 @@ class WallpaperAlarmSchedulerImpl @Inject constructor(
                 }
                 val nextMidnight = LocalDateTime.now().plusDays(1).withHour(0).withMinute(0).withSecond(0).withNano(0)
                 Log.d(TAG, "Scheduling inexact repeating refresh alarm for next midnight: $nextMidnight")
-                alarmManager.setInexactRepeating(
-                    AlarmManager.RTC_WAKEUP,
-                    nextMidnight.atZone(ZoneId.systemDefault()).toEpochSecond() * 1000,
-                    AlarmManager.INTERVAL_DAY,
-                    PendingIntent.getBroadcast(
-                        context,
-                        Type.REFRESH.ordinal,
-                        intent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-                    )
+
+                val pendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    Type.REFRESH.ordinal,
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
                 )
+
+                // Try exact alarm first, fall back to inexact if permission denied
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+                    Log.w(TAG, "Cannot schedule exact refresh alarm, falling back to inexact")
+                    alarmManager.setInexactRepeating(
+                        AlarmManager.RTC_WAKEUP,
+                        nextMidnight.atZone(ZoneId.systemDefault()).toEpochSecond() * 1000,
+                        AlarmManager.INTERVAL_DAY,
+                        pendingIntent
+                    )
+                } else {
+                    alarmManager.setInexactRepeating(
+                        AlarmManager.RTC_WAKEUP,
+                        nextMidnight.atZone(ZoneId.systemDefault()).toEpochSecond() * 1000,
+                        AlarmManager.INTERVAL_DAY,
+                        pendingIntent
+                    )
+                }
             }
         }
     }
@@ -133,7 +147,6 @@ class WallpaperAlarmSchedulerImpl @Inject constructor(
         }
     }
 
-    @RequiresPermission(Manifest.permission.SCHEDULE_EXACT_ALARM)
     private suspend fun scheduleWallpaper(
         wallpaperAlarmItem: WallpaperAlarmItem,
         type: Type,
@@ -149,13 +162,19 @@ class WallpaperAlarmSchedulerImpl @Inject constructor(
 
             val intent = createWallpaperIntent(wallpaperAlarmItem, type, origin)
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
-                Log.w(TAG, "Cannot schedule exact alarms. Permission may be denied.")
-                cancelWallpaperAlarm()
-                return
+            // Check if we can schedule exact alarms; fall back to inexact if not
+            val canScheduleExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                alarmManager.canScheduleExactAlarms()
+            } else {
+                true
             }
 
-            scheduleExactAlarm(nextTime, intent)
+            if (canScheduleExact) {
+                scheduleExactAlarm(nextTime, intent)
+            } else {
+                Log.w(TAG, "Cannot schedule exact alarms. Falling back to inexact alarm for type '$type'.")
+                scheduleInexactAlarm(nextTime, intent)
+            }
 
             val formatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
             when (type) {
@@ -182,7 +201,6 @@ class WallpaperAlarmSchedulerImpl @Inject constructor(
 
         } catch (e: Exception) {
             Log.e(TAG, "Error scheduling wallpaper alarm for type '$type'", e)
-            cancelWallpaperAlarm()
         }
     }
 
@@ -268,22 +286,26 @@ class WallpaperAlarmSchedulerImpl @Inject constructor(
     }
 
     private fun postNotification(nextSetTime: LocalDateTime) {
-        val formatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
-        val formattedNextSetTime = nextSetTime.format(formatter)
-        val mainActivityIntent = Intent(context, MainActivity::class.java)
-        val pendingMainActivityIntent = PendingIntent.getActivity(
-            context, 3, mainActivityIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val notification = NotificationCompat.Builder(context, "wallpaper_service_channel").apply {
-            setContentTitle(context.getString(R.string.app_name))
-            setContentText(context.getString(R.string.next_wallpaper_change, formattedNextSetTime))
-            setSmallIcon(R.drawable.notification_icon)
-            setContentIntent(pendingMainActivityIntent)
-            priority = NotificationCompat.PRIORITY_DEFAULT
-            setOnlyAlertOnce(true)
-        }.build()
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(3, notification)
+        try {
+            val formatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
+            val formattedNextSetTime = nextSetTime.format(formatter)
+            val mainActivityIntent = Intent(context, MainActivity::class.java)
+            val pendingMainActivityIntent = PendingIntent.getActivity(
+                context, 3, mainActivityIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            val notification = NotificationCompat.Builder(context, "wallpaper_service_channel").apply {
+                setContentTitle(context.getString(R.string.app_name))
+                setContentText(context.getString(R.string.next_wallpaper_change, formattedNextSetTime))
+                setSmallIcon(R.drawable.notification_icon)
+                setContentIntent(pendingMainActivityIntent)
+                priority = NotificationCompat.PRIORITY_DEFAULT
+                setOnlyAlertOnce(true)
+            }.build()
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.notify(3, notification)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to post notification", e)
+        }
     }
 
     private fun createWallpaperIntent(wallpaperAlarmItem: WallpaperAlarmItem, type: Type, origin: Int?): Intent {
@@ -319,6 +341,27 @@ class WallpaperAlarmSchedulerImpl @Inject constructor(
         )
     }
 
+    /**
+     * Fallback: schedule an inexact alarm when exact alarm permission is not available.
+     * Uses setAndAllowWhileIdle so it can still fire in Doze mode.
+     */
+    private fun scheduleInexactAlarm(nextTime: LocalDateTime, intent: Intent) {
+        val requestCode = intent.getIntExtra("type", 0)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        )
+        val triggerAtMillis = nextTime.atZone(ZoneId.systemDefault()).toEpochSecond() * 1000
+        Log.d(TAG, "Setting inexact alarm for $nextTime (Millis: $triggerAtMillis) with requestCode: $requestCode")
+        alarmManager.setAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            triggerAtMillis,
+            pendingIntent
+        )
+    }
+
     private fun cancelAlarm(type: Type) {
         Log.d(TAG, "Cancelling alarm for type: $type (requestCode: ${type.ordinal})")
         val pendingIntent = PendingIntent.getBroadcast(
@@ -333,11 +376,15 @@ class WallpaperAlarmSchedulerImpl @Inject constructor(
     override suspend fun updateWallpaperAlarm(wallpaperAlarmItem: WallpaperAlarmItem, firstLaunch: Boolean) {
         cancelWallpaperAlarm()
         try {
+            // Read the next times from DataStore for proper rescheduling
+            val homeNextTime = settingsDataStore.getString(SettingsConstants.HOME_NEXT_SET_TIME)
+            val lockNextTime = settingsDataStore.getString(SettingsConstants.LOCK_NEXT_SET_TIME)
+
             if (wallpaperAlarmItem.scheduleSeparately) {
-                scheduleWallpaper(wallpaperAlarmItem, Type.LOCK, Type.LOCK.ordinal, firstLaunch, "", "")
-                scheduleWallpaper(wallpaperAlarmItem, Type.HOME, Type.HOME.ordinal, firstLaunch, "", "")
+                scheduleWallpaper(wallpaperAlarmItem, Type.LOCK, Type.LOCK.ordinal, firstLaunch, homeNextTime, lockNextTime)
+                scheduleWallpaper(wallpaperAlarmItem, Type.HOME, Type.HOME.ordinal, firstLaunch, homeNextTime, lockNextTime)
             } else {
-                scheduleWallpaper(wallpaperAlarmItem, Type.SINGLE, null, firstLaunch, "", "")
+                scheduleWallpaper(wallpaperAlarmItem, Type.SINGLE, null, firstLaunch, homeNextTime, lockNextTime)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error updating wallpaper alarm", e)

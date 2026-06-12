@@ -39,6 +39,8 @@ import javax.inject.Inject
 class HomeWallpaperService: Service() {
     companion object {
         private const val NOTIFICATION_ID = 1
+        private const val WAKELOCK_TAG = "Paperize:HomeWallpaperService"
+        private const val WAKELOCK_TIMEOUT_MS = 5 * 60 * 1000L // 5 minutes max
     }
     private val serviceScope = CoroutineScope(Dispatchers.Default)
     private val handleThread = HandlerThread("HomeThread")
@@ -50,6 +52,7 @@ class HomeWallpaperService: Service() {
     private var lockInterval: Int = SettingsConstants.WALLPAPER_CHANGE_INTERVAL_DEFAULT
     private var type = Type.SINGLE.ordinal
     private var isForeground = false
+    private var wakeLock: PowerManager.WakeLock? = null
 
     enum class Actions {
         START,
@@ -59,12 +62,22 @@ class HomeWallpaperService: Service() {
 
     override fun onBind(p0: Intent?): IBinder? = null
 
+    @Suppress("DEPRECATION")
     override fun onCreate() {
         super.onCreate()
         if (!handleThread.isAlive) {
             handleThread.start()
         }
         workerHandler = Handler(handleThread.looper)
+        // Acquire a WakeLock to keep the CPU awake while changing wallpaper
+        try {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG)
+            wakeLock?.acquire(WAKELOCK_TIMEOUT_MS)
+            Log.d("HomeWallpaperService", "WakeLock acquired")
+        } catch (e: Exception) {
+            Log.e("HomeWallpaperService", "Failed to acquire WakeLock", e)
+        }
         if (!isForeground) {
             val notification = createInitialNotification()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -102,6 +115,16 @@ class HomeWallpaperService: Service() {
         serviceScope.cancel()
         workerHandler.removeCallbacksAndMessages(null)
         handleThread.quitSafely()
+        // Release the WakeLock
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+                Log.d("HomeWallpaperService", "WakeLock released")
+            }
+            wakeLock = null
+        } catch (e: Exception) {
+            Log.e("HomeWallpaperService", "Failed to release WakeLock", e)
+        }
     }
 
     private fun workerTaskStart() {
